@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { HashRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 
@@ -28,21 +28,28 @@ const App = () => (
         <TooltipProvider>
           <Toaster />
           <Sonner />
-          <BrowserRouter>
+
+          {/* ✅ GitHub Pages Safe Router */}
+          <HashRouter>
             <Routes>
               <Route path="/" element={<HomePage />} />
 
-              {/* BROWSE (Comics + Novels in one page) */}
+              {/* BROWSE */}
               <Route path="/browse" element={<BrowsePage />} />
 
               {/* COMICS */}
               <Route path="/series/:id" element={<SeriesDetailPage />} />
-              <Route path="/series/:id/episode/:episodeNum" element={<EpisodeReaderPage />} />
+              <Route
+                path="/series/:id/episode/:episodeNum"
+                element={<EpisodeReaderPage />}
+              />
 
               {/* NOVELS */}
               <Route path="/novels/:id" element={<NovelDetailPage />} />
-              {/* ✅ THIS fixes your 404: /novels/2/chapters/1 */}
-              <Route path="/novels/:id/chapters/:chapterId" element={<ChapterReaderPage />} />
+              <Route
+                path="/novels/:id/chapters/:chapterId"
+                element={<ChapterReaderPage />}
+              />
 
               {/* CREATOR */}
               <Route path="/creator" element={<CreatorDashboard />} />
@@ -51,7 +58,7 @@ const App = () => (
 
               <Route path="*" element={<NotFound />} />
             </Routes>
-          </BrowserRouter>
+          </HashRouter>
         </TooltipProvider>
       </AuthProvider>
     </ThemeProvider>

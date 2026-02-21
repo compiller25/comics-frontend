@@ -1,11 +1,23 @@
 // src/lib/api/client.ts
-const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000/api";
-const BACKEND_BASE = import.meta.env.VITE_BACKEND_BASE || "http://127.0.0.1:8000";
+
+/**
+ * Single source of truth:
+ * - VITE_BACKEND_ORIGIN should be like: https://HadithiTube.pythonanywhere.com
+ * - API base becomes: <origin>/api
+ *
+ * Local dev default: http://127.0.0.1:8000
+ */
+const BACKEND_ORIGIN =
+  (import.meta.env.VITE_BACKEND_ORIGIN as string | undefined) ||
+  "http://127.0.0.1:8000";
+
+const API_BASE = `${BACKEND_ORIGIN.replace(/\/+$/, "")}/api`;
 
 export function absolutizeMedia(url?: string | null) {
   if (!url) return "";
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  return `${BACKEND_BASE}${url}`;
+  // url from backend usually starts with /media/...
+  return `${BACKEND_ORIGIN.replace(/\/+$/, "")}${url}`;
 }
 
 /** Support multiple token key names (prevents “logged in but 401”) */
@@ -98,7 +110,7 @@ async function refreshAccessToken(): Promise<boolean> {
             Accept: "application/json",
             "Content-Type": "application/json",
           },
-          credentials: "include", // supports cookie-based auth too
+          credentials: "include",
           body: JSON.stringify({ refresh }),
         });
 
@@ -137,7 +149,6 @@ export async function apiFetch<T>(
     const h = new Headers(opts.headers || {});
     h.set("Accept", "application/json");
 
-    // JSON payload
     if (opts.json !== undefined) {
       h.set("Content-Type", "application/json");
     }
@@ -158,7 +169,7 @@ export async function apiFetch<T>(
       ...opts,
       headers: buildHeaders(),
       body: buildBody(),
-      credentials: "include", // IMPORTANT (cookie/session fallback + some hosts)
+      credentials: "include",
     });
     const data = await safeRead(res);
     return { res, data };
@@ -167,7 +178,7 @@ export async function apiFetch<T>(
   // 1) first attempt
   let { res, data } = await doRequest();
 
-  // 2) 401 → try refresh once (covers both token_not_valid AND “credentials not provided”)
+  // 2) 401 → try refresh once
   if (res.status === 401 && looksAuthRelated401(data)) {
     const refreshed = await refreshAccessToken();
     if (refreshed) {
@@ -178,7 +189,7 @@ export async function apiFetch<T>(
   }
 
   if (!res.ok) {
-    let msg =
+    const msg =
       data?.detail ||
       data?.message ||
       (data && typeof data === "object"
