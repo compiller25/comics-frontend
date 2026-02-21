@@ -1,56 +1,69 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { Eye, EyeOff, BookOpen, Check } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
+import { useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
+import { Eye, EyeOff, BookOpen, Check } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 export default function SignupPage() {
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
   const [showPassword, setShowPassword] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
   const { signup } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const passwordRequirements = [
-    { label: 'At least 8 characters', met: password.length >= 8 },
-    { label: 'Contains a number', met: /\d/.test(password) },
-    { label: 'Contains uppercase letter', met: /[A-Z]/.test(password) },
-  ];
+  const passwordRequirements = useMemo(
+    () => [
+      { label: "At least 8 characters", met: password.length >= 8 },
+      { label: "Contains a number", met: /\d/.test(password) },
+      { label: "Contains uppercase letter", met: /[A-Z]/.test(password) },
+    ],
+    [password]
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
+
     if (!agreeTerms) {
       toast({
-        title: 'Please agree to terms',
-        description: 'You must agree to the terms of service to continue.',
-        variant: 'destructive',
+        title: "Please agree to terms",
+        description: "You must agree to the terms of service to continue.",
+        variant: "destructive",
       });
       return;
     }
 
     setIsLoading(true);
-
     try {
-      await signup(username, email, password);
+      await signup(username.trim(), email.trim(), password);
+
       toast({
-        title: 'Account created!',
-        description: 'Welcome to ToonVerse. Start exploring!',
+        title: "Account created!",
+        description: "You’re in. Redirecting to Creator Studio…",
       });
-      navigate('/');
+
+      // Go straight to creator studio to test uploads
+      navigate("/creator");
     } catch (error) {
+      const msg =
+        (error as Error)?.message || "Failed to create account. Please try again.";
+
       toast({
-        title: 'Error',
-        description: 'Failed to create account. Please try again.',
-        variant: 'destructive',
+        title: "Signup failed",
+        description: msg,
+        variant: "destructive",
       });
     } finally {
       setIsLoading(false);
@@ -69,9 +82,7 @@ export default function SignupPage() {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
         <div className="absolute bottom-12 left-12 right-12">
-          <h2 className="text-3xl font-bold text-white mb-4">
-            Join millions of readers
-          </h2>
+          <h2 className="text-3xl font-bold text-white mb-4">Join millions of readers</h2>
           <p className="text-white/80">
             Create an account to unlock bookmarks, reading history, and personalized recommendations.
           </p>
@@ -90,7 +101,7 @@ export default function SignupPage() {
               <BookOpen className="w-5 h-5 text-primary-foreground" />
             </div>
             <span className="text-xl font-bold">
-              <span className="gradient-text">Toon</span>Verse
+              <span className="gradient-text">Hadithi</span>Tube
             </span>
           </Link>
 
@@ -109,6 +120,7 @@ export default function SignupPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
+                autoComplete="username"
               />
             </div>
 
@@ -121,6 +133,7 @@ export default function SignupPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                autoComplete="email"
               />
             </div>
 
@@ -129,29 +142,32 @@ export default function SignupPage() {
               <div className="relative">
                 <Input
                   id="password"
-                  type={showPassword ? 'text' : 'password'}
+                  type={showPassword ? "text" : "password"}
                   placeholder="Create a strong password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  autoComplete="new-password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+
               <div className="mt-2 space-y-1">
                 {passwordRequirements.map((req) => (
                   <div
                     key={req.label}
                     className={`flex items-center gap-2 text-xs ${
-                      req.met ? 'text-green-500' : 'text-muted-foreground'
+                      req.met ? "text-green-500" : "text-muted-foreground"
                     }`}
                   >
-                    <Check className={`w-3 h-3 ${req.met ? 'opacity-100' : 'opacity-30'}`} />
+                    <Check className={`w-3 h-3 ${req.met ? "opacity-100" : "opacity-30"}`} />
                     {req.label}
                   </div>
                 ))}
@@ -165,11 +181,11 @@ export default function SignupPage() {
                 onCheckedChange={(checked) => setAgreeTerms(checked as boolean)}
               />
               <Label htmlFor="terms" className="text-sm font-normal leading-tight">
-                I agree to the{' '}
+                I agree to the{" "}
                 <Link to="#" className="text-primary hover:underline">
                   Terms of Service
-                </Link>{' '}
-                and{' '}
+                </Link>{" "}
+                and{" "}
                 <Link to="#" className="text-primary hover:underline">
                   Privacy Policy
                 </Link>
@@ -177,12 +193,12 @@ export default function SignupPage() {
             </div>
 
             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? 'Creating account...' : 'Create Account'}
+              {isLoading ? "Creating account..." : "Create Account"}
             </Button>
           </form>
 
           <p className="text-center text-sm text-muted-foreground mt-6">
-            Already have an account?{' '}
+            Already have an account?{" "}
             <Link to="/login" className="text-primary hover:underline">
               Sign in
             </Link>

@@ -1,103 +1,197 @@
-import { useState, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { Search, SlidersHorizontal, Grid, List } from 'lucide-react';
-import Layout from '@/components/layout/Layout';
-import SeriesCard from '@/components/series/SeriesCard';
-import GenreFilter from '@/components/series/GenreFilter';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet';
-import { mockSeries, searchSeries, filterByGenre } from '@/lib/mockData';
-import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { Search, SlidersHorizontal, Grid, List } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
-type SortOption = 'popular' | 'latest' | 'rating' | 'trending';
-type StatusFilter = 'all' | 'ongoing' | 'completed' | 'hiatus';
+import Layout from "@/components/layout/Layout";
+import SeriesCard from "@/components/series/SeriesCard";
+import GenreFilter from "@/components/series/GenreFilter";
+import NovelCard from "@/components/novels/NovelCard";
+
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+
+import { listSeries } from "@/lib/api/comics";
+import type { Series } from "@/lib/types";
+
+import { listNovels } from "@/lib/api/novels";
+import type { Novel } from "@/lib/api/novels";
+
+type SortOption = "popular" | "latest" | "rating" | "trending";
+type StatusFilter = "all" | "ongoing" | "completed" | "hiatus";
+type ContentFilter = "all" | "comics" | "novels";
+
+type BrowseItem = { kind: "comic"; data: Series } | { kind: "novel"; data: Novel };
+
+function normalizeStatus(st: any): string {
+  // unify "completed" vs "complete"
+  if (st === "completed") return "complete";
+  return String(st ?? "");
+}
+
+function safeTime(obj: any): number {
+  const raw =
+    obj?.updatedAt ??
+    obj?.updated_at ??
+    obj?.createdAt ??
+    obj?.created_at ??
+    obj?.created_on ??
+    obj?.created;
+
+  const t = raw ? Date.parse(raw) : NaN;
+  return Number.isFinite(t) ? t : 0;
+}
 
 export default function BrowsePage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialQuery = searchParams.get('q') || '';
-  const initialSort = (searchParams.get('sort') as SortOption) || 'popular';
+  const initialQuery = searchParams.get("q") || "";
+  const initialSort = (searchParams.get("sort") as SortOption) || "popular";
+  const initialContent = (searchParams.get("content") as ContentFilter) || "all";
 
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>(initialSort);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [contentFilter, setContentFilter] = useState<ContentFilter>(initialContent);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
-  const filteredSeries = useMemo(() => {
-    let result = [...mockSeries];
+  // COMICS
+  const {
+    data: seriesData = [],
+    isLoading: comicsLoading,
+    error: comicsError,
+    refetch: refetchComics,
+  } = useQuery({
+    queryKey: ["series"],
+    queryFn: listSeries,
+  });
 
-    // Search filter
-    if (searchQuery) {
-      result = searchSeries(searchQuery);
+  // NOVELS
+  const {
+    data: novelsData = [],
+    isLoading: novelsLoading,
+    error: novelsError,
+    refetch: refetchNovels,
+  } = useQuery({
+    queryKey: ["novels-public"],
+    queryFn: listNovels,
+  });
+
+  const isLoading = comicsLoading || novelsLoading;
+  const error = comicsError || novelsError;
+
+  const filteredItems = useMemo(() => {
+    let items: BrowseItem[] = [
+      ...seriesData.map((s) => ({ kind: "comic" as const, data: s })),
+      ...novelsData.map((n) => ({ kind: "novel" as const, data: n })),
+    ];
+
+    // Content filter
+    if (contentFilter !== "all") {
+      items = items.filter((i) => (contentFilter === "comics" ? i.kind === "comic" : i.kind === "novel"));
     }
 
-    // Genre filter
+    // Search filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      items = items.filter((i) => {
+        const title = String((i.data as any).title || "").toLowerCase();
+        const desc = String((i.data as any).description || "").toLowerCase();
+        return title.includes(q) || desc.includes(q);
+      });
+    }
+
+    // Genre filter (comics only)
     if (selectedGenre) {
-      result = result.filter((s) => s.genres.includes(selectedGenre));
+      items = items.filter((i) => {
+        if (i.kind !== "comic") return true;
+        const s = i.data as Series;
+        return (s.genres || []).includes(selectedGenre);
+      });
     }
 
     // Status filter
-    if (statusFilter !== 'all') {
-      result = result.filter((s) => s.status === statusFilter);
+    if (statusFilter !== "all") {
+      const want = normalizeStatus(statusFilter);
+      items = items.filter((i) => normalizeStatus((i.data as any).status) === want);
     }
 
     // Sorting
     switch (sortBy) {
-      case 'popular':
-        result.sort((a, b) => b.views - a.views);
+      case "popular":
+        items.sort((a, b) => {
+          const av = a.kind === "comic" ? Number((a.data as any).views || 0) : Number((a.data as any).chapterCount || 0);
+          const bv = b.kind === "comic" ? Number((b.data as any).views || 0) : Number((b.data as any).chapterCount || 0);
+          return bv - av;
+        });
         break;
-      case 'latest':
-        result.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+      case "latest":
+        items.sort((a, b) => safeTime(b.data) - safeTime(a.data));
         break;
-      case 'rating':
-        result.sort((a, b) => b.rating - a.rating);
+
+      case "rating":
+        items.sort((a, b) => {
+          const ar = a.kind === "comic" ? Number((a.data as any).rating || 0) : -1;
+          const br = b.kind === "comic" ? Number((b.data as any).rating || 0) : -1;
+          return br - ar;
+        });
         break;
-      case 'trending':
-        result = result.filter((s) => s.isTrending).concat(result.filter((s) => !s.isTrending));
+
+      case "trending":
+        items = items
+          .filter((i) => i.kind === "comic" && Boolean((i.data as any).isTrending))
+          .concat(items.filter((i) => !(i.kind === "comic" && Boolean((i.data as any).isTrending))));
         break;
     }
 
-    return result;
-  }, [searchQuery, selectedGenre, sortBy, statusFilter]);
+    return items;
+  }, [seriesData, novelsData, contentFilter, searchQuery, selectedGenre, sortBy, statusFilter]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchQuery) {
-      setSearchParams({ q: searchQuery });
-    } else {
-      setSearchParams({});
-    }
+    const params: Record<string, string> = {};
+    if (searchQuery.trim()) params.q = searchQuery.trim();
+    params.sort = sortBy;
+    params.content = contentFilter;
+    setSearchParams(params);
+  };
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setSelectedGenre(null);
+    setStatusFilter("all");
+    setSortBy("popular");
+    setContentFilter("all");
+    setSearchParams({});
+  };
+
+  const refetchAll = () => {
+    refetchComics();
+    refetchNovels();
   };
 
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8">
-        {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Browse Comics</h1>
-          <p className="text-muted-foreground">
-            Discover your next favorite series from our collection
-          </p>
+          <h1 className="text-3xl font-bold mb-2">Browse</h1>
+          <p className="text-muted-foreground">Comics + novels in one place</p>
         </div>
 
-        {/* Search and Filters */}
+        {error ? (
+          <div className="mb-6 rounded-lg border p-4">
+            <p className="text-sm text-red-500 mb-3">{(error as Error).message || "Failed to load content."}</p>
+            <Button variant="outline" onClick={refetchAll}>
+              Retry
+            </Button>
+          </div>
+        ) : null}
+
         <div className="flex flex-col md:flex-row gap-4 mb-6">
           <form onSubmit={handleSearch} className="flex-1">
             <div className="relative">
@@ -112,7 +206,18 @@ export default function BrowsePage() {
             </div>
           </form>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <Select value={contentFilter} onValueChange={(v) => setContentFilter(v as ContentFilter)}>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue placeholder="Content" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="comics">Comics</SelectItem>
+                <SelectItem value="novels">Novels</SelectItem>
+              </SelectContent>
+            </Select>
+
             <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
               <SelectTrigger className="w-[140px]">
                 <SelectValue placeholder="Sort by" />
@@ -125,7 +230,6 @@ export default function BrowsePage() {
               </SelectContent>
             </Select>
 
-            {/* Filters Sheet */}
             <Sheet>
               <SheetTrigger asChild>
                 <Button variant="outline" size="icon">
@@ -135,61 +239,61 @@ export default function BrowsePage() {
               <SheetContent>
                 <SheetHeader>
                   <SheetTitle>Filters</SheetTitle>
-                  <SheetDescription>
-                    Refine your search results
-                  </SheetDescription>
+                  <SheetDescription>Refine your search results</SheetDescription>
                 </SheetHeader>
+
                 <div className="py-6 space-y-6">
                   <div>
                     <Label className="text-sm font-medium mb-3 block">Status</Label>
-                    <RadioGroup
-                      value={statusFilter}
-                      onValueChange={(v) => setStatusFilter(v as StatusFilter)}
-                    >
+                    <RadioGroup value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="all" id="all" />
-                        <Label htmlFor="all" className="font-normal">All</Label>
+                        <Label htmlFor="all" className="font-normal">
+                          All
+                        </Label>
                       </div>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="ongoing" id="ongoing" />
-                        <Label htmlFor="ongoing" className="font-normal">Ongoing</Label>
+                        <Label htmlFor="ongoing" className="font-normal">
+                          Ongoing
+                        </Label>
                       </div>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="completed" id="completed" />
-                        <Label htmlFor="completed" className="font-normal">Completed</Label>
+                        <Label htmlFor="completed" className="font-normal">
+                          Completed
+                        </Label>
                       </div>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="hiatus" id="hiatus" />
-                        <Label htmlFor="hiatus" className="font-normal">On Hiatus</Label>
+                        <Label htmlFor="hiatus" className="font-normal">
+                          On Hiatus
+                        </Label>
                       </div>
                     </RadioGroup>
                   </div>
 
                   <div>
-                    <Label className="text-sm font-medium mb-3 block">Genres</Label>
-                    <GenreFilter
-                      selectedGenre={selectedGenre}
-                      onSelectGenre={setSelectedGenre}
-                    />
+                    <Label className="text-sm font-medium mb-3 block">Genres (Comics)</Label>
+                    <GenreFilter selectedGenre={selectedGenre} onSelectGenre={setSelectedGenre} />
                   </div>
                 </div>
               </SheetContent>
             </Sheet>
 
-            {/* View Mode Toggle */}
             <div className="hidden sm:flex border rounded-lg overflow-hidden">
               <Button
-                variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+                variant={viewMode === "grid" ? "secondary" : "ghost"}
                 size="icon"
-                onClick={() => setViewMode('grid')}
+                onClick={() => setViewMode("grid")}
                 className="rounded-none"
               >
                 <Grid className="w-4 h-4" />
               </Button>
               <Button
-                variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                variant={viewMode === "list" ? "secondary" : "ghost"}
                 size="icon"
-                onClick={() => setViewMode('list')}
+                onClick={() => setViewMode("list")}
                 className="rounded-none"
               >
                 <List className="w-4 h-4" />
@@ -198,42 +302,51 @@ export default function BrowsePage() {
           </div>
         </div>
 
-        {/* Genre Pills */}
-        <div className="mb-6 overflow-x-auto pb-2 hide-scrollbar">
-          <GenreFilter selectedGenre={selectedGenre} onSelectGenre={setSelectedGenre} />
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">{isLoading ? "Loading..." : `${filteredItems.length} items found`}</p>
+          <Button variant="outline" size="sm" onClick={clearFilters}>
+            Clear Filters
+          </Button>
         </div>
 
-        {/* Results */}
-        <div className="mb-4">
-          <p className="text-sm text-muted-foreground">
-            {filteredSeries.length} {filteredSeries.length === 1 ? 'series' : 'series'} found
-          </p>
-        </div>
-
-        {filteredSeries.length === 0 ? (
+        {isLoading ? (
+          <div className="py-16 text-center text-muted-foreground">Loading...</div>
+        ) : filteredItems.length === 0 ? (
           <div className="text-center py-16">
-            <p className="text-lg text-muted-foreground mb-4">
-              No comics found matching your criteria
-            </p>
-            <Button variant="outline" onClick={() => {
-              setSearchQuery('');
-              setSelectedGenre(null);
-              setStatusFilter('all');
-            }}>
+            <p className="text-lg text-muted-foreground mb-4">No results found</p>
+            <Button variant="outline" onClick={clearFilters}>
               Clear Filters
             </Button>
           </div>
-        ) : viewMode === 'grid' ? (
+        ) : viewMode === "grid" ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-            {filteredSeries.map((series, index) => (
-              <SeriesCard key={series.id} series={series} index={index} />
-            ))}
+            {filteredItems.map((item, index) =>
+              item.kind === "comic" ? (
+                <SeriesCard key={`comic-${(item.data as Series).id}`} series={item.data as Series} index={index} />
+              ) : (
+                <NovelCard key={`novel-${(item.data as Novel).id}`} novel={item.data as Novel} index={index} />
+              )
+            )}
           </div>
         ) : (
           <div className="space-y-2">
-            {filteredSeries.map((series, index) => (
-              <SeriesCard key={series.id} series={series} variant="compact" index={index} />
-            ))}
+            {filteredItems.map((item, index) =>
+              item.kind === "comic" ? (
+                <SeriesCard
+                  key={`comic-${(item.data as Series).id}`}
+                  series={item.data as Series}
+                  variant="compact"
+                  index={index}
+                />
+              ) : (
+                <NovelCard
+                  key={`novel-${(item.data as Novel).id}`}
+                  novel={item.data as Novel}
+                  variant="compact"
+                  index={index}
+                />
+              )
+            )}
           </div>
         )}
       </div>

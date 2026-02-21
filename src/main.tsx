@@ -1,5 +1,13 @@
 import { createRoot } from "react-dom/client";
-import App from "./App.tsx";
+import { StrictMode } from "react";
+import App from "./App";
 import "./index.css";
 
-createRoot(document.getElementById("root")!).render(<App />);
+// Hard-set default app title (fallback)
+document.title = "HADITHI TUBE";
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);

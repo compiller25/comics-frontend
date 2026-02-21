@@ -47,8 +47,10 @@ export default function Navbar() {
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-orange-400 flex items-center justify-center">
               <BookOpen className="w-5 h-5 text-primary-foreground" />
             </div>
+
+            {/* Brand */}
             <span className="text-xl font-bold hidden sm:block">
-              <span className="gradient-text">Toon</span>Verse
+              <span className="gradient-text">Hadithi</span>Tube
             </span>
           </Link>
 
@@ -117,17 +119,8 @@ export default function Navbar() {
             </div>
 
             {/* Theme Toggle */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleTheme}
-              className="h-9 w-9"
-            >
-              {theme === 'dark' ? (
-                <Sun className="w-4 h-4" />
-              ) : (
-                <Moon className="w-4 h-4" />
-              )}
+            <Button variant="ghost" size="icon" onClick={toggleTheme} className="h-9 w-9">
+              {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </Button>
 
             {/* User Menu */}
@@ -141,6 +134,7 @@ export default function Navbar() {
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
+
                 <DropdownMenuContent className="w-56" align="end">
                   <div className="flex items-center gap-2 p-2">
                     <Avatar className="h-8 w-8">
@@ -152,7 +146,9 @@ export default function Navbar() {
                       <span className="text-xs text-muted-foreground">{user?.email}</span>
                     </div>
                   </div>
+
                   <DropdownMenuSeparator />
+
                   <DropdownMenuItem asChild>
                     <Link to="/profile">Profile</Link>
                   </DropdownMenuItem>
@@ -162,7 +158,9 @@ export default function Navbar() {
                   <DropdownMenuItem asChild>
                     <Link to="/creator">Creator Studio</Link>
                   </DropdownMenuItem>
+
                   <DropdownMenuSeparator />
+
                   <DropdownMenuItem onClick={logout} className="text-destructive">
                     Logout
                   </DropdownMenuItem>
@@ -207,6 +205,7 @@ export default function Navbar() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </form>
+
             <div className="flex flex-col gap-2">
               {navLinks.map((link) => (
                 <Link
@@ -223,6 +222,7 @@ export default function Navbar() {
                   {link.label}
                 </Link>
               ))}
+
               {!isAuthenticated && (
                 <Link
                   to="/login"
